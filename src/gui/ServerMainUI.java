@@ -8,6 +8,7 @@ package gui;
 import error.CBGNException;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.HashMap;
 import java.util.logging.Level;
@@ -34,19 +35,50 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
         initComponents();
     }
 
+    /**
+     *
+     */
     @Override
     public void onBegin() {
         this.serverLogArea.append("\nServer started.");
     }
 
+    /**
+     *
+     * @param name
+     */
+    @Override
+    public void onConnection(String name) {
+        this.serverLogArea.append("\nServer: new connection! \"" + name + "\"");
+    }
+
+    /**
+     *
+     * @param data
+     */
     @Override
     public void onMessage(HashMap<String, String> data) {
         this.serverLogArea.append("\nServer received: " + data.toString());
     }
 
+    /**
+     *
+     * @param socket
+     * @param reason
+     */
+    @Override
+    public void onConnectionClosed(Socket socket, CBGNException reason) {
+        this.serverLogArea.append("\nConnection has quit for reason: " + reason.getMessage());
+    }
+
+    /**
+     *
+     * @param except
+     */
     @Override
     public void onStopped(CBGNException except) {
-        this.serverLogArea.append("\nServer stopped with exception: " + (except == null ? "None" : except.getMessage()));
+        this.serverLogArea.append("\nServer stopped with exception: "
+                + (except == null ? "None" : except.getMessage()));
     }
 
     /**
@@ -118,11 +150,14 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
         jLabel7.setText("Message:");
 
         serverSendButton.setText("Send");
+        serverSendButton.setEnabled(false);
         serverSendButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 serverSendButtonActionPerformed(evt);
             }
         });
+
+        serverMessageField.setEnabled(false);
 
         javax.swing.GroupLayout jPanel4Layout = new javax.swing.GroupLayout(jPanel4);
         jPanel4.setLayout(jPanel4Layout);
@@ -188,7 +223,10 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
 
         jLabel4.setText("Message:");
 
+        messageField.setEnabled(false);
+
         sendButton.setText("Send");
+        sendButton.setEnabled(false);
         sendButton.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 sendButtonActionPerformed(evt);
@@ -263,11 +301,15 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
         );
 
         serverLogArea.setColumns(20);
+        serverLogArea.setLineWrap(true);
         serverLogArea.setRows(5);
+        serverLogArea.setWrapStyleWord(true);
+        serverLogArea.setEnabled(false);
         jScrollPane3.setViewportView(serverLogArea);
 
         lockToBottomCheck.setSelected(true);
         lockToBottomCheck.setText("Lock to Bottom");
+        lockToBottomCheck.setEnabled(false);
         lockToBottomCheck.addActionListener(new java.awt.event.ActionListener() {
             public void actionPerformed(java.awt.event.ActionEvent evt) {
                 lockToBottomCheckActionPerformed(evt);
@@ -276,6 +318,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
 
         verboseCheck.setSelected(true);
         verboseCheck.setText("Verbose");
+        verboseCheck.setEnabled(false);
 
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
@@ -311,6 +354,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
                 "Connection", "Ping"
             }
         ));
+        connectionPingTable.setEnabled(false);
         jScrollPane2.setViewportView(connectionPingTable);
 
         javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
@@ -357,6 +401,13 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
             server.registerListener(this);
             serverThread = new Thread(server);
             serverThread.start();
+
+            this.serverMessageField.setEnabled(true);
+            this.serverSendButton.setEnabled(true);
+            this.serverLogArea.setEnabled(true);
+            this.lockToBottomCheck.setEnabled(true);
+            this.verboseCheck.setEnabled(true);
+            this.connectionPingTable.setEnabled(true);
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Please enter a server port that is a number.");
         }
@@ -378,6 +429,9 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
             client = new CBGNClient(addr, port, port + 1);
             clientThread = new Thread(client);
             clientThread.start();
+
+            this.messageField.setEnabled(true);
+            this.sendButton.setEnabled(true);
         } catch (UnknownHostException e) {
             JOptionPane.showMessageDialog(this, "Please enter a server IP address or 'localhost'.");
         } catch (NumberFormatException e) {
@@ -410,7 +464,11 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
             if (!message.isEmpty()) {
                 HashMap<String, String> data = new HashMap<>();
                 data.put("message", message);
-                client.sendMessage(data);
+                try {
+                    client.sendMessage(data);
+                } catch (IOException e) {
+                    this.serverLogArea.append("\nCould not send message: " + e.getMessage());
+                }
             }
         }
     }//GEN-LAST:event_sendButtonActionPerformed

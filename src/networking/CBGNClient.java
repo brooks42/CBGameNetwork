@@ -20,7 +20,7 @@ import java.util.logging.Logger;
  *
  * @author Chris
  */
-public class CBGNClient implements Runnable, CBGNConnectionListener {
+public final class CBGNClient implements Runnable {
 
     private Socket requestSocket;
     private PrintWriter out;
@@ -32,6 +32,8 @@ public class CBGNClient implements Runnable, CBGNConnectionListener {
     private final int tcpPort, udpPort;
 
     private CBGNConnection conn;
+
+    private CBGNClientConnectionAdapter adapter;
 
     /**
      * Creates a new CBGNClient with the passed address and port number. When
@@ -53,12 +55,13 @@ public class CBGNClient implements Runnable, CBGNConnectionListener {
      * communicating as appropriate.
      */
     @Override
-    public void run() {
+    public final void run() {
         try {
             System.out.println("Client started");
             requestSocket = new Socket(address.getHostAddress(), tcpPort);
 
-            conn = new CBGNConnection(this, requestSocket);
+            adapter = new CBGNClientConnectionAdapter(this);
+            conn = new CBGNConnection(adapter, requestSocket);
             conn.run();
         } catch (UnknownHostException e) {
             Logger.getLogger(CBGNClient.class.getName()).log(Level.SEVERE, null, e);
@@ -74,15 +77,11 @@ public class CBGNClient implements Runnable, CBGNConnectionListener {
         }
     }
 
-    @Override
-    public void onMessage(GameEvent event) {
-        System.out.println(event.toString());
-    }
-
     /**
      * Sends the passed GameEvent to the server.
      *
      * @param data the data to be sent in a GameEvent
+     * @throws java.io.IOException if there's a problem sending the message
      */
     public void sendMessage(HashMap<String, String> data) throws IOException {
         System.out.println("Sending data: " + new GameEvent(data).toString());
@@ -120,5 +119,27 @@ public class CBGNClient implements Runnable, CBGNConnectionListener {
          }
          }
          }.start();*/
+    }
+}
+
+// internal adapter class to provide a consistent internal API with the 
+// CBGNConnectionListener while not having to muck around with exposing 
+// its internals to the external API
+class CBGNClientConnectionAdapter extends CBGNConnectionListener {
+
+    CBGNClient client;
+
+    public CBGNClientConnectionAdapter(CBGNClient client) {
+        this.client = client;
+    }
+
+    @Override
+    protected void onMessage(CBGNConnection conn, HashMap<String, String> data) {
+        System.out.println("Client got a message");
+    }
+
+    @Override
+    protected void onConnectionClosed(CBGNConnection conn, String reason) {
+
     }
 }

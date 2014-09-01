@@ -1,6 +1,8 @@
 package networking;
 
 import java.util.HashMap;
+import java.util.Set;
+import org.json.simple.JSONObject;
 
 /**
  * The GameEvent class contains a map of events and a connection the event has
@@ -85,7 +87,14 @@ final class GameEvent {
      */
     @Override
     public String toString() {
-        // TODO: this should serialize this event using JSON
-        return "lolnotimplemented";
+
+        JSONObject json = new JSONObject();
+        Set<String> set = data.keySet();
+
+        for (String key : set) {
+            json.put(key, (String) data.get(key));
+        }
+
+        return json.toJSONString();
     }
 }

@@ -8,4 +8,7 @@ package error;
  */
 public class CBGNException extends Exception {
 
+    public CBGNException(String reason) {
+        super(reason);
+    }
 }

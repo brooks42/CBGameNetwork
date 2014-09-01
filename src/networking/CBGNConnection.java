@@ -10,6 +10,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
 
 /**
  *
@@ -28,6 +33,9 @@ class CBGNConnection implements Runnable {
     // created this connection in the first place.
     private CBGNConnectionListener listener;
 
+    // an internal parser we store so we don't have to continuously instantiate one
+    private JSONParser parser;
+
     /**
      * Creates a Connection around the passed Socket.
      *
@@ -38,6 +46,7 @@ class CBGNConnection implements Runnable {
         if (listener == null) {
             throw new IllegalArgumentException("Cannot create a CBGNConnection with a null listener.");
         }
+        this.listener = listener;
         this.clientSocket = socket;
         this.name = clientSocket.toString();
     }
@@ -54,19 +63,37 @@ class CBGNConnection implements Runnable {
             String inputLine;
 
             while ((inputLine = in.readLine()) != null) {
-                System.out.println("Connection " + name + " got " + inputLine);
-                // TODO: turn the input line into a map with JSON
+                listener.onMessage(this, dataFromJSON(inputLine));
             }
         } catch (IOException e) {
-            // TODO: find a logger Logger.log(e);
+            Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, e);
         } finally {
             try {
                 close();
             } catch (IOException e) {
                 // blargh I am ded
-                // TODO: find a logger Logger.log(e);
+                Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, e);
             }
         }
+    }
+
+    /**
+     *
+     *
+     * @param json
+     * @return
+     */
+    private HashMap<String, String> dataFromJSON(String json) {
+        HashMap<String, String> data = new HashMap<>();
+
+        JSONParser parser = new JSONParser();
+        try {
+            data = (HashMap<String, String>) parser.parse(json);
+        } catch (ParseException | ClassCastException ex) {
+            Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, ex);
+        }
+
+        return data;
     }
 
     /**
@@ -79,7 +106,6 @@ class CBGNConnection implements Runnable {
         if (out == null) {
             throw new IOException("Connection " + this.name + " could not send message to null OutputStream.");
         }
-        System.out.println(name + " sending " + message);
         out.println(message);
         out.flush();
     }

@@ -1,6 +1,7 @@
 package networking;
 
 import error.CBGNException;
+import java.net.Socket;
 import java.util.HashMap;
 
 /**
@@ -17,11 +18,28 @@ public interface CBGNServerListener {
     public void onBegin();
 
     /**
+     * Called when the server receives a new connection.
+     *
+     * @param name the name of the new connection. Unless this is overridden,
+     * this will typically be the socket's toString()
+     */
+    public void onConnection(String name);
+
+    /**
      * Called by the server when it receives a new GameEvent.
      *
      * @param data the data received by the server, presumably from a client.
      */
     public void onMessage(HashMap<String, String> data);
+
+    /**
+     * Called when the server's connection to the socket is closed for some
+     * reason. The reason is detailed in the parameters.
+     *
+     * @param socket the socket that was closed
+     * @param reason the reason the socket was closed
+     */
+    public void onConnectionClosed(Socket socket, CBGNException reason);
 
     /**
      * Called by the server when it stops, either for an error or because of
