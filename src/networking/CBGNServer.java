@@ -1,12 +1,8 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package networking;
 
 import error.CBGNException;
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
@@ -19,14 +15,28 @@ import java.util.logging.Logger;
  */
 public class CBGNServer implements Runnable {
 
+    public final static int DEFAULT_SERVER_PORT = 1776;
+    public final static int DEFAULT_SERVER_UDP_PORT = 1777;
+    public final static int DEFAULT_SERVER_BROADCAST_PORT = 1778;
+
     // a list of connections this Server is maintaining
     private final HashMap<Socket, CBGNConnection> connections;
 
-    private final int port;
+    private final int tcpPort, udpPort, udpBroadcastPort;
 
     protected CBGNServerListener listener;
 
     private CBGNServerConnectionAdapter adapter;
+
+    // the UDP connection, in case we need to manage it at some point
+    private CBGNConnection udpConn;
+
+    /**
+     * Creates a new CBGNServer object with the default ports.
+     */
+    public CBGNServer() {
+        this(DEFAULT_SERVER_PORT, DEFAULT_SERVER_UDP_PORT, DEFAULT_SERVER_BROADCAST_PORT);
+    }
 
     /**
      * Creates a new CBGNServer object listening on the passed port.
@@ -34,7 +44,32 @@ public class CBGNServer implements Runnable {
      * @param port the port for this Server to listen on
      */
     public CBGNServer(int port) {
-        this.port = port;
+        this(port, DEFAULT_SERVER_UDP_PORT, DEFAULT_SERVER_BROADCAST_PORT);
+    }
+
+    /**
+     * Creates a new CBGNServer object listening on the passed port.
+     *
+     * @param tcpPort the port for this Server to listen on
+     * @param udpPort the port for this Server to listen to UDP on
+     */
+    public CBGNServer(int tcpPort, int udpPort) {
+        this(tcpPort, udpPort, DEFAULT_SERVER_BROADCAST_PORT);
+    }
+
+    /**
+     * Creates a new CBGNServer object listening on the passed port.
+     *
+     * @param tcpPort the port for this Server to listen on
+     * @param udpPort the port for this Server to listen to UDP on
+     * @param udpBroadcastPort the port for this server to send UDP packets to.
+     * By default the server will broadcast to (get this)
+     * DEFAULT_CLIENT_UDP_PORT.
+     */
+    public CBGNServer(int tcpPort, int udpPort, int udpBroadcastPort) {
+        this.tcpPort = tcpPort;
+        this.udpPort = udpPort;
+        this.udpBroadcastPort = udpBroadcastPort;
         connections = new HashMap<>();
     }
 
@@ -81,15 +116,21 @@ public class CBGNServer implements Runnable {
             }
 
             adapter = new CBGNServerConnectionAdapter(this);
-            ServerSocket serverSocket = new ServerSocket(port);
+            ServerSocket serverSocket = new ServerSocket(getTcpPort());
             Socket clientSocket;
+
+            // start the UDP thread here, since we only need one
+            DatagramSocket udpSocket = new DatagramSocket(getUdpPort());
+            udpConn = new CBGNConnection(adapter, udpSocket);
+            Thread thread = new Thread(udpConn);
+            thread.start();
 
             // here we listen for connections and accept them over and over
             while (true) {
                 // start a new Thread for each client, because server
                 clientSocket = serverSocket.accept();
                 CBGNConnection conn = new CBGNConnection(adapter, clientSocket);
-                Thread thread = new Thread(conn);
+                thread = new Thread(conn);
                 thread.start();
                 listener.onConnection(conn.name);
                 connections.put(clientSocket, conn);
@@ -126,7 +167,7 @@ public class CBGNServer implements Runnable {
      */
     private void broadcastUDPMessage(GameEvent event) throws IOException {
         for (CBGNConnection conn : connections.values()) {
-            conn.sendUDPMessage(event.toString());
+            udpConn.sendUDPMessage(conn.clientSocket.getInetAddress(), this.udpBroadcastPort, event.toString());
         }
     }
 
@@ -153,6 +194,27 @@ public class CBGNServer implements Runnable {
     public void broadcastUDPMessage(HashMap<String, String> data) throws IOException {
         broadcastUDPMessage(new GameEvent(data));
     }
+
+    /**
+     * @return the tcpPort
+     */
+    public int getTcpPort() {
+        return tcpPort;
+    }
+
+    /**
+     * @return the udpPort
+     */
+    public int getUdpPort() {
+        return udpPort;
+    }
+
+    /**
+     * @return the udpBroadcastPort
+     */
+    public int getUdpBroadcastPort() {
+        return udpBroadcastPort;
+    }
 }
 
 // internal adapter class to provide a consistent internal API with the 
@@ -172,6 +234,21 @@ class CBGNServerConnectionAdapter extends CBGNConnectionListener {
         try {
             server.listener.onMessage(data);
             server.broadcastMessage(data);
+        } catch (IOException e) {
+            System.out.println("Server error sending message: " + e.getMessage());
+        }
+    }
+
+    //
+    @Override
+    protected void onUDPMessage(CBGNConnection conn, HashMap<String, String> data) {
+        try {
+            if (data != null) {
+                server.listener.onUDPMessage(data);
+                server.broadcastUDPMessage(data);
+            } else {
+                System.out.println("Server received UDP message, but it was bad.");
+            }
         } catch (IOException e) {
             System.out.println("Server error sending message: " + e.getMessage());
         }

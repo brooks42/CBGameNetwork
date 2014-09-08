@@ -17,6 +17,13 @@ abstract class CBGNConnectionListener {
      * @param event the GameEvent
      */
     protected abstract void onMessage(CBGNConnection conn, HashMap<String, String> data);
+    
+    /**
+     * Called when a Connection receives a GameEvent from the server.
+     *
+     * @param event the GameEvent
+     */
+    protected abstract void onUDPMessage(CBGNConnection conn, HashMap<String, String> data);
 
     /**
      * Called when the connection is closed. The reason string is (supposed to

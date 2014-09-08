@@ -1,14 +1,12 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package networking;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
 import java.util.HashMap;
 import java.util.logging.Level;
@@ -24,6 +22,7 @@ class CBGNConnection implements Runnable {
 
     // the socket for this Connection
     protected Socket clientSocket;
+    protected DatagramSocket udpSocket;
     private PrintStream out;
     private BufferedReader in;
     // the name of this Connection. For now it's just the toString() of its socket
@@ -46,9 +45,35 @@ class CBGNConnection implements Runnable {
         if (listener == null) {
             throw new IllegalArgumentException("Cannot create a CBGNConnection with a null listener.");
         }
+        if (socket == null) {
+            throw new IllegalArgumentException("Cannot create a CBGNConnection with a null TCP socket.");
+        }
         this.listener = listener;
         this.clientSocket = socket;
         this.name = clientSocket.toString();
+
+        parser = new JSONParser();
+    }
+
+    /**
+     * Creates a Connection around the passed Socket.
+     *
+     * @param server
+     * @param socket
+     */
+    public CBGNConnection(CBGNConnectionListener listener, DatagramSocket socket) {
+        System.out.println("Creating CBGNConnection UDP");
+        if (listener == null) {
+            throw new IllegalArgumentException("Cannot create a CBGNConnection with a null listener.");
+        }
+        if (socket == null) {
+            throw new IllegalArgumentException("Cannot create a CBGNConnection with a null UDP socket.");
+        }
+        this.listener = listener;
+        this.udpSocket = socket;
+        this.name = udpSocket.toString();
+
+        parser = new JSONParser();
     }
 
     /**
@@ -57,22 +82,42 @@ class CBGNConnection implements Runnable {
     @Override
     public void run() {
         try {
-            out = new PrintStream(clientSocket.getOutputStream(), true);
-            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+            if (clientSocket != null) {
+                // do a TCP connection
+                out = new PrintStream(clientSocket.getOutputStream(), true);
+                in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
-            String inputLine;
+                String inputLine;
 
-            while ((inputLine = in.readLine()) != null) {
-                listener.onMessage(this, dataFromJSON(inputLine));
+                while ((inputLine = in.readLine()) != null) {
+                    listener.onMessage(this, dataFromJSON(inputLine));
+                }
+            }
+            if (udpSocket != null) {
+                // do a UDP connection instead
+                DatagramPacket p = new DatagramPacket(new byte[512], 0, 512);
+
+                do {
+                    try {
+                        udpSocket.receive(p);
+                        listener.onUDPMessage(this, dataFromJSON(new String(p.getData())));
+                    } catch (NullPointerException e) {
+                        // this means the connection was killed, we should handle this through the listener.
+                        // either way this socket is done, so we're done.
+                        // listener.onConnectionClosed();
+                        System.out.println("Connection is dead :( :" + e.getMessage());
+                        break;
+                    }
+                } while (true);
             }
         } catch (IOException e) {
             Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, e);
-        } finally {
             try {
+                System.out.println("Server closed");
                 close();
-            } catch (IOException e) {
+            } catch (IOException ex) {
                 // blargh I am ded
-                Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, e);
+                Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, ex);
             }
         }
     }
@@ -84,16 +129,18 @@ class CBGNConnection implements Runnable {
      * @return
      */
     private HashMap<String, String> dataFromJSON(String json) {
-        HashMap<String, String> data = new HashMap<>();
+        json = json.trim();
 
-        JSONParser parser = new JSONParser();
-        try {
-            data = (HashMap<String, String>) parser.parse(json);
-        } catch (ParseException | ClassCastException ex) {
-            Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, ex);
+        if (json.equals("")) {
+            return new HashMap<>();
         }
 
-        return data;
+        try {
+            return (HashMap<String, String>) parser.parse(json);
+        } catch (ParseException | ClassCastException ex) {
+            Logger.getLogger(CBGNConnection.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
+        }
     }
 
     /**
@@ -111,13 +158,17 @@ class CBGNConnection implements Runnable {
     }
 
     /**
-     * Sends a UDP message using this Connection's underlying UDP thread.
+     * Sends a UDP message to the passed address using this Connection's
+     * underlying UDP socket.
      *
      * @param message
      * @throws IOException
      */
-    public void sendUDPMessage(String message) throws IOException {
-        // TODO: send UDP
+    public void sendUDPMessage(InetAddress addr, int port, String message) throws IOException {
+        if (udpSocket == null) {
+            throw new IOException("Trying to send UDP over a TCP connection. Check that you're sending UDP from a UDP connection.");
+        }
+        udpSocket.send(new DatagramPacket(message.getBytes(), 0, message.getBytes().length, addr, port));
     }
 
     /**
@@ -128,6 +179,11 @@ class CBGNConnection implements Runnable {
      */
     public void close() throws IOException {
         //listener.onConnectionClosed("Quit");
-        clientSocket.close();
+        if (clientSocket != null) {
+            clientSocket.close();
+        }
+        if (udpSocket != null) {
+            udpSocket.close();
+        }
     }
 }

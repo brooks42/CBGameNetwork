@@ -33,6 +33,13 @@ public interface CBGNServerListener {
     public void onMessage(HashMap<String, String> data);
 
     /**
+     * Called by the server when it receives a new GameEvent through UDP.
+     *
+     * @param data the data received by the server, presumably from a client.
+     */
+    public void onUDPMessage(HashMap<String, String> data);
+
+    /**
      * Called when the server's connection to the socket is closed for some
      * reason. The reason is detailed in the parameters.
      *

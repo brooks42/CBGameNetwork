@@ -1,10 +1,6 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package networking;
 
+import error.CBGNException;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -17,37 +13,66 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
+ * The CBGNClient class represents a client to the CBGNServer. Typically a single
+ * game instance will create a single client instance, connect to a server through
+ * the client's API and then clean up when it's finished.
  *
  * @author Chris
  */
 public final class CBGNClient implements Runnable {
 
-    private Socket requestSocket;
+    public final static int DEFAULT_CLIENT_TCP_PORT = 1776;
+    public final static int DEFAULT_CLIENT_UDP_PORT = 1778;
+
+    private Socket tcpSocket;
     private PrintWriter out;
     private BufferedReader in;
     private DatagramSocket udpSocket;
 
-    // the address and port for this client
+    // the address and port for this client's connection to the server
     private final InetAddress address;
-    private final int tcpPort, udpPort;
+    private final int tcpPort, udpPort, serverUDPPort;
 
-    private CBGNConnection conn;
+    private CBGNConnection tcpConn, udpConn;
 
     private CBGNClientConnectionAdapter adapter;
+
+    // a listener this client will provide callbacks to when appropriate.
+    protected CBGNClientListener listener;
 
     /**
      * Creates a new CBGNClient with the passed address and port number. When
      * the client is started, it will attempt to use the passed address and port
      * as its socket values.
      *
+     * @param listener a listener to perform callbacks on
      * @param address the IP address of the server to connect to.
      * @param tcpPort the port number to connect for TCP
-     * @param udpPort the port number to connect for UDP
+     * @param udpPort the port number to connect (on this machine) for UDP
+     * @param serverUDPPort the port number for sending UDP messages to the
+     * server (in other words, the server's UDP port)
      */
-    public CBGNClient(InetAddress address, int tcpPort, int udpPort) {
+    public CBGNClient(CBGNClientListener listener, InetAddress address, int tcpPort, int udpPort, int serverUDPPort) {
+        if (listener == null || address == null) {
+            throw new IllegalArgumentException("Listener and address for a client cannot be null.");
+        }
+        this.listener = listener;
         this.address = address;
         this.tcpPort = tcpPort;
         this.udpPort = udpPort;
+        this.serverUDPPort = serverUDPPort;
+    }
+
+    /**
+     * Sets this client's listener to the passed one.
+     *
+     * @param listener a new CBGNClientListener for callbacks
+     */
+    public void setListener(CBGNClientListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("Listener cannot be null.");
+        }
+        this.listener = listener;
     }
 
     /**
@@ -57,68 +82,60 @@ public final class CBGNClient implements Runnable {
     @Override
     public final void run() {
         try {
-            System.out.println("Client started");
-            requestSocket = new Socket(address.getHostAddress(), tcpPort);
+            tcpSocket = new Socket(address.getHostAddress(), getTcpPort());
+            udpSocket = new DatagramSocket(getUdpPort(), address);
 
             adapter = new CBGNClientConnectionAdapter(this);
-            conn = new CBGNConnection(adapter, requestSocket);
-            conn.run();
+            tcpConn = new CBGNConnection(adapter, tcpSocket);
+            udpConn = new CBGNConnection(adapter, udpSocket);
+            new Thread(tcpConn).start();
+            new Thread(udpConn).start();
         } catch (UnknownHostException e) {
             Logger.getLogger(CBGNClient.class.getName()).log(Level.SEVERE, null, e);
-        } catch (IOException e) {
+        } catch (IOException | IllegalArgumentException e) {
             Logger.getLogger(CBGNClient.class.getName()).log(Level.SEVERE, null, e);
-        } finally {
-            try {
-                conn.close();
-            } catch (IOException e) {
-                // everything has gone to hell
-                Logger.getLogger(CBGNClient.class.getName()).log(Level.SEVERE, null, e);
-            }
         }
     }
 
     /**
-     * Sends the passed GameEvent to the server.
+     * Sends the passed HashMap of data to the server.
      *
-     * @param data the data to be sent in a GameEvent
+     * @param data the data to be sent to the server
      * @throws java.io.IOException if there's a problem sending the message
      */
     public void sendMessage(HashMap<String, String> data) throws IOException {
-        System.out.println("Sending data: " + new GameEvent(data).toString());
-        conn.sendMessage(new GameEvent(data).toString());
+        tcpConn.sendMessage(new GameEvent(data).toString());
     }
 
     /**
-     * Starts the UDP server thread
+     * Sends the passed HashMap of data to the server over UDP.
+     *
+     * @param data the data to be sent to the server
+     * @throws java.io.IOException if there's a problem sending the message
      */
-    public void startUDP() {
-        /*System.out.println("Initializing Client UDP");
-         // start a new thread to manage the UDP side of the server
-         new Thread() {
-         @Override
-         public void run() {
+    public void sendUDPMessage(HashMap<String, String> data) throws IOException {
+        udpConn.sendUDPMessage(address, getServerUDPPort(), new GameEvent(data).toString());
+    }
 
-         try {
-         udpSocket = new DatagramSocket(UDP_CLIENT_PORT);
-         } catch (SocketException e) {
-         System.out.println("LANClient.Exception: " + e.getMessage());
-         }
-         byte[] receiveData = new byte[1024];
-         DatagramPacket receivePacket = new DatagramPacket(receiveData, receiveData.length);
+    /**
+     * @return the tcpPort
+     */
+    public int getTcpPort() {
+        return tcpPort;
+    }
 
-         while (true) {
-         try {
-         // start the UDP socket to receive UDP
-         udpSocket.receive(receivePacket);
-         String message = new String(receivePacket.getData());
-         System.out.println("Client received UDP: " + message);
-         interpretGameEvent(LANSerializer.deserializeGameEvent(message));
-         } catch (IOException ex) {
-         java.util.logging.Logger.getLogger(LANClient.class.getName()).log(Level.SEVERE, null, ex);
-         }
-         }
-         }
-         }.start();*/
+    /**
+     * @return the udpPort
+     */
+    public int getUdpPort() {
+        return udpPort;
+    }
+
+    /**
+     * @return the serverUDPPort
+     */
+    public int getServerUDPPort() {
+        return serverUDPPort;
     }
 }
 
@@ -135,11 +152,16 @@ class CBGNClientConnectionAdapter extends CBGNConnectionListener {
 
     @Override
     protected void onMessage(CBGNConnection conn, HashMap<String, String> data) {
-        System.out.println("Client got a message");
+        client.listener.onClientMessage(data);
+    }
+
+    @Override
+    protected void onUDPMessage(CBGNConnection conn, HashMap<String, String> data) {
+        client.listener.onClientUDPMessage(data);
     }
 
     @Override
     protected void onConnectionClosed(CBGNConnection conn, String reason) {
-
+        client.listener.onClientConnectionClosed(new CBGNException(reason));
     }
 }

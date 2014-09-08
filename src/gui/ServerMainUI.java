@@ -1,8 +1,3 @@
-/*
- * To change this license header, choose License Headers in Project Properties.
- * To change this template file, choose Tools | Templates
- * and open the template in the editor.
- */
 package gui;
 
 import error.CBGNException;
@@ -15,14 +10,20 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.swing.JOptionPane;
 import networking.CBGNClient;
+import networking.CBGNClientListener;
 import networking.CBGNServer;
 import networking.CBGNServerListener;
 
 /**
+ * The ServerMainUI class is a simple UI that executed the basic functionality
+ * of the CBGN API. You can start a server, connect to it with a client and then
+ * message back and forth while keeping track of the ping between
+ * clients/server. The goal of this class isn't to be a game or anything, but to
+ * exercise the API for both ease-of-implementation and testing purposes.
  *
  * @author Chris
  */
-public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListener {
+public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListener, CBGNClientListener {
 
     private CBGNServer server;
     private Thread serverThread, clientThread;
@@ -33,6 +34,12 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
      */
     public ServerMainUI() {
         initComponents();
+
+        this.serverPortField.setText("" + CBGNServer.DEFAULT_SERVER_PORT);
+        this.serverUDPPortField.setText("" + CBGNServer.DEFAULT_SERVER_UDP_PORT);
+
+        this.clientPortField.setText("" + CBGNClient.DEFAULT_CLIENT_TCP_PORT);
+        this.targetUDPPortField.setText("" + CBGNClient.DEFAULT_CLIENT_UDP_PORT);
     }
 
     /**
@@ -40,7 +47,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
      */
     @Override
     public void onBegin() {
-        this.serverLogArea.append("\nServer started.");
+        log("Server started.");
     }
 
     /**
@@ -49,7 +56,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
      */
     @Override
     public void onConnection(String name) {
-        this.serverLogArea.append("\nServer: new connection! \"" + name + "\"");
+        log("Server: new connection! \"" + name + "\"");
     }
 
     /**
@@ -58,7 +65,12 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
      */
     @Override
     public void onMessage(HashMap<String, String> data) {
-        this.serverLogArea.append("\nServer received: " + data.toString());
+        log("Server received: " + data.toString());
+    }
+
+    @Override
+    public void onUDPMessage(HashMap<String, String> data) {
+        log("Server received UDP: " + data.toString());
     }
 
     /**
@@ -68,7 +80,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
      */
     @Override
     public void onConnectionClosed(Socket socket, CBGNException reason) {
-        this.serverLogArea.append("\nConnection has quit for reason: " + reason.getMessage());
+        log("Connection has quit for reason: " + reason.getMessage());
     }
 
     /**
@@ -77,8 +89,39 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
      */
     @Override
     public void onStopped(CBGNException except) {
-        this.serverLogArea.append("\nServer stopped with exception: "
+        log("Server stopped with exception: "
                 + (except == null ? "None" : except.getMessage()));
+    }
+
+    // client methods
+    @Override
+    public void onClientConnected() {
+        log("\tClient successfully connected!");
+    }
+
+    @Override
+    public void onClientMessage(HashMap<String, String> data) {
+        log("\tClient received TCP: " + data.toString());
+    }
+
+    @Override
+    public void onClientUDPMessage(HashMap<String, String> data) {
+        log("\tClient received UDP: " + data.toString());
+    }
+
+    @Override
+    public void onClientConnectionClosed(CBGNException reason) {
+        log("\tClient stopped with exception: "
+                + (reason == null ? "None" : reason.getMessage()));
+    }
+
+    /**
+     *
+     * @param message
+     */
+    public void log(String message) {
+        System.out.println(message);
+        this.serverLogArea.append("\n" + message);
     }
 
     /**
@@ -103,6 +146,9 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
         jLabel7 = new javax.swing.JLabel();
         serverSendButton = new javax.swing.JButton();
         serverMessageField = new javax.swing.JTextField();
+        serverTCPCheck = new javax.swing.JCheckBox();
+        jLabel9 = new javax.swing.JLabel();
+        serverUDPPortField = new javax.swing.JTextField();
         jPanel5 = new javax.swing.JPanel();
         jLabel2 = new javax.swing.JLabel();
         serverLocationField = new javax.swing.JTextField();
@@ -112,6 +158,9 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
         sendButton = new javax.swing.JButton();
         jLabel5 = new javax.swing.JLabel();
         clientPortField = new javax.swing.JTextField();
+        clientTCPCheck = new javax.swing.JCheckBox();
+        jLabel8 = new javax.swing.JLabel();
+        targetUDPPortField = new javax.swing.JTextField();
         jPanel2 = new javax.swing.JPanel();
         jScrollPane3 = new javax.swing.JScrollPane();
         serverLogArea = new javax.swing.JTextArea();
@@ -157,7 +206,15 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
             }
         });
 
+        serverMessageField.setText("Hello, client!");
         serverMessageField.setEnabled(false);
+
+        serverTCPCheck.setSelected(true);
+        serverTCPCheck.setText("TCP");
+
+        jLabel9.setText("UDP port:");
+
+        serverUDPPortField.setText("1777");
 
         javax.swing.GroupLayout jPanel4Layout = new javax.swing.GroupLayout(jPanel4);
         jPanel4.setLayout(jPanel4Layout);
@@ -177,8 +234,15 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
                         .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
                             .addComponent(maxConnectionCountField, javax.swing.GroupLayout.PREFERRED_SIZE, 38, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addComponent(serverPortField, javax.swing.GroupLayout.PREFERRED_SIZE, 59, javax.swing.GroupLayout.PREFERRED_SIZE))
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(startServerButton))
+                        .addGap(10, 10, 10)
+                        .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel4Layout.createSequentialGroup()
+                                .addComponent(jLabel9)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(serverUDPPortField, javax.swing.GroupLayout.PREFERRED_SIZE, 69, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                                .addComponent(startServerButton))
+                            .addComponent(serverTCPCheck, javax.swing.GroupLayout.Alignment.TRAILING)))
                     .addGroup(jPanel4Layout.createSequentialGroup()
                         .addComponent(jLabel7)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
@@ -193,18 +257,21 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
                 .addContainerGap()
                 .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel6)
-                    .addComponent(serverPortField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(serverPortField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(startServerButton)
+                    .addComponent(jLabel9)
+                    .addComponent(serverUDPPortField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(startServerButton)
                     .addComponent(jLabel3)
-                    .addComponent(maxConnectionCountField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(maxConnectionCountField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(serverTCPCheck))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 17, Short.MAX_VALUE)
-                .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(jLabel7)
+                .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel4Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                         .addComponent(serverMessageField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addComponent(serverSendButton)))
+                        .addComponent(serverSendButton))
+                    .addComponent(jLabel7))
                 .addContainerGap())
         );
 
@@ -223,6 +290,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
 
         jLabel4.setText("Message:");
 
+        messageField.setText("Hello, server!");
         messageField.setEnabled(false);
 
         sendButton.setText("Send");
@@ -237,29 +305,43 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
 
         clientPortField.setText("1776");
 
+        clientTCPCheck.setSelected(true);
+        clientTCPCheck.setText("TCP");
+
+        jLabel8.setText("Server UDP:");
+
+        targetUDPPortField.setText("1777");
+
         javax.swing.GroupLayout jPanel5Layout = new javax.swing.GroupLayout(jPanel5);
         jPanel5.setLayout(jPanel5Layout);
         jPanel5Layout.setHorizontalGroup(
             jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(jPanel5Layout.createSequentialGroup()
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel5Layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(jPanel5Layout.createSequentialGroup()
-                        .addComponent(jLabel2)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(serverLocationField, javax.swing.GroupLayout.PREFERRED_SIZE, 146, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jLabel5)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                        .addComponent(clientPortField, javax.swing.GroupLayout.PREFERRED_SIZE, 71, javax.swing.GroupLayout.PREFERRED_SIZE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(connectToServerButton, javax.swing.GroupLayout.PREFERRED_SIZE, 138, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(jPanel5Layout.createSequentialGroup()
+                .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel5Layout.createSequentialGroup()
                         .addComponent(jLabel4)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(messageField)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(sendButton)))
+                        .addComponent(sendButton))
+                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel5Layout.createSequentialGroup()
+                        .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                            .addComponent(jLabel8)
+                            .addGroup(jPanel5Layout.createSequentialGroup()
+                                .addComponent(jLabel2)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(serverLocationField, javax.swing.GroupLayout.PREFERRED_SIZE, 146, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(jLabel5)))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                            .addComponent(targetUDPPortField)
+                            .addComponent(clientPortField, javax.swing.GroupLayout.DEFAULT_SIZE, 71, Short.MAX_VALUE))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 73, Short.MAX_VALUE)
+                        .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(connectToServerButton, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 138, javax.swing.GroupLayout.PREFERRED_SIZE)
+                            .addComponent(clientTCPCheck, javax.swing.GroupLayout.Alignment.TRAILING))))
                 .addContainerGap())
         );
         jPanel5Layout.setVerticalGroup(
@@ -272,7 +354,12 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
                     .addComponent(connectToServerButton)
                     .addComponent(jLabel5)
                     .addComponent(clientPortField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 44, Short.MAX_VALUE)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 14, Short.MAX_VALUE)
+                .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(clientTCPCheck)
+                    .addComponent(jLabel8)
+                    .addComponent(targetUDPPortField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanel5Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel4)
                     .addComponent(messageField, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -408,6 +495,11 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
             this.lockToBottomCheck.setEnabled(true);
             this.verboseCheck.setEnabled(true);
             this.connectionPingTable.setEnabled(true);
+
+            log("Server started on ports"
+                    + "\n\tTCP: " + server.getTcpPort()
+                    + "\n\tUDP: " + server.getUdpPort()
+                    + "\n\tbUDP: " + server.getUdpBroadcastPort());
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this, "Please enter a server port that is a number.");
         }
@@ -423,10 +515,18 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
 
         try {
             int port = Integer.parseInt(this.clientPortField.getText());
+            int udpPort = CBGNClient.DEFAULT_CLIENT_UDP_PORT;
+            int serverUDPPort = Integer.parseInt(this.targetUDPPortField.getText());
 
             InetAddress addr = InetAddress.getByName(serverLocation);
 
-            client = new CBGNClient(addr, port, port + 1);
+            client = new CBGNClient(this, addr, port, udpPort, serverUDPPort);
+
+            log("Client starting on ports..."
+                    + "\n\tTCP: " + client.getTcpPort()
+                    + "\n\tUDP: " + client.getUdpPort()
+                    + "\n\tbUDP: " + client.getServerUDPPort());
+
             clientThread = new Thread(client);
             clientThread.start();
 
@@ -450,7 +550,11 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
                 HashMap<String, String> data = new HashMap<>();
                 data.put("message", message);
                 try {
-                    server.broadcastMessage(data);
+                    if (serverTCPCheck.isSelected()) {
+                        server.broadcastMessage(data);
+                    } else {
+                        server.broadcastUDPMessage(data);
+                    }
                 } catch (IOException ex) {
                     Logger.getLogger(ServerMainUI.class.getName()).log(Level.SEVERE, null, ex);
                 }
@@ -465,9 +569,13 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
                 HashMap<String, String> data = new HashMap<>();
                 data.put("message", message);
                 try {
-                    client.sendMessage(data);
+                    if (clientTCPCheck.isSelected()) {
+                        client.sendMessage(data);
+                    } else {
+                        client.sendUDPMessage(data);
+                    }
                 } catch (IOException e) {
-                    this.serverLogArea.append("\nCould not send message: " + e.getMessage());
+                    log("Could not send message: " + e.getMessage());
                 }
             }
         }
@@ -487,6 +595,7 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JTextField clientPortField;
+    private javax.swing.JCheckBox clientTCPCheck;
     private javax.swing.JButton connectToServerButton;
     private javax.swing.JTable connectionPingTable;
     private javax.swing.JLabel jLabel1;
@@ -496,6 +605,8 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
     private javax.swing.JLabel jLabel5;
     private javax.swing.JLabel jLabel6;
     private javax.swing.JLabel jLabel7;
+    private javax.swing.JLabel jLabel8;
+    private javax.swing.JLabel jLabel9;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
@@ -514,7 +625,10 @@ public class ServerMainUI extends javax.swing.JFrame implements CBGNServerListen
     private javax.swing.JTextField serverMessageField;
     private javax.swing.JTextField serverPortField;
     private javax.swing.JButton serverSendButton;
+    private javax.swing.JCheckBox serverTCPCheck;
+    private javax.swing.JTextField serverUDPPortField;
     private javax.swing.JButton startServerButton;
+    private javax.swing.JTextField targetUDPPortField;
     private javax.swing.JCheckBox verboseCheck;
     // End of variables declaration//GEN-END:variables
 }
