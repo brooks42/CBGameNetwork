@@ -83,12 +83,12 @@ public final class CBGNClient implements Runnable {
     public final void run() {
         try {
             tcpSocket = new Socket(address.getHostAddress(), getTcpPort());
-            udpSocket = new DatagramSocket(getUdpPort(), address);
-
             adapter = new CBGNClientConnectionAdapter(this);
             tcpConn = new CBGNConnection(adapter, tcpSocket);
-            udpConn = new CBGNConnection(adapter, udpSocket);
             new Thread(tcpConn).start();
+            
+            udpSocket = new DatagramSocket(udpPort);
+            udpConn = new CBGNConnection(adapter, udpSocket);
             new Thread(udpConn).start();
         } catch (UnknownHostException e) {
             Logger.getLogger(CBGNClient.class.getName()).log(Level.SEVERE, null, e);

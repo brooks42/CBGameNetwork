@@ -168,6 +168,7 @@ class CBGNConnection implements Runnable {
         if (udpSocket == null) {
             throw new IOException("Trying to send UDP over a TCP connection. Check that you're sending UDP from a UDP connection.");
         }
+        System.out.println("Sending to address " + addr.toString() + ":" + port);
         udpSocket.send(new DatagramPacket(message.getBytes(), 0, message.getBytes().length, addr, port));
     }
 
@@ -178,7 +179,7 @@ class CBGNConnection implements Runnable {
      * @throws IOException if closing the socket fails
      */
     public void close() throws IOException {
-        //listener.onConnectionClosed("Quit");
+        listener.onConnectionClosed(this, "Quit");
         if (clientSocket != null) {
             clientSocket.close();
         }
